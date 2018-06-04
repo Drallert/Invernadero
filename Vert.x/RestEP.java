@@ -6,8 +6,10 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import io.vertx.mqtt.MqttTopicSubscription;
 import io.vertx.core.AbstractVerticle;
@@ -23,6 +25,7 @@ import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.ext.web.handler.CorsHandler;
 import io.vertx.mqtt.MqttClient;
 import io.vertx.mqtt.MqttClientOptions;
 import io.vertx.mqtt.MqttEndpoint;
@@ -75,7 +78,11 @@ public class RestEP extends AbstractVerticle {
 				}
 
 		);
+		 Set<String> allowedHeaders = new HashSet<>();
+		 allowedHeaders.add("Access-Control-Allow-Origin");
+		
 		router.route("/database/*").handler(BodyHandler.create()); // <-- "Directorio raiz" de tu servidor
+		 router.route().handler(CorsHandler.create("*").allowedHeaders(allowedHeaders));
 		router.get("/database/entera/:tabla/").handler(this::getTablaEntera);
 		router.get("/database/medicionf/:tabla/:fecha1/:fecha2/").handler(routingContext -> {
 			try {
@@ -86,9 +93,11 @@ public class RestEP extends AbstractVerticle {
 			}
 		});
 		router.get("/database/mediatotal/:tabla/").handler(this::getMediaTotal);
+		router.get("/database/ultima/:tabla/").handler(this::getUltimaMedicion);
 		router.put("/database/insercion/:tabla/").handler(this::putMed);
 		router.post("/database/comando/").handler(this::postComando);
-
+		
+		
 		mqttServer = MqttServer.create(vertx);
 		init(mqttServer);
 		
@@ -312,6 +321,7 @@ public class RestEP extends AbstractVerticle {
 								routingContext.response().setStatusCode(400).end(res.cause().toString());
 							}
 						});
+						connection.close();
 					} else {
 						routingContext.response().setStatusCode(400).end(comm.cause().toString());
 					}
@@ -370,6 +380,7 @@ public class RestEP extends AbstractVerticle {
 								routingContext.response().setStatusCode(400).end(res.cause().toString());
 							}
 						});
+						connection.close();
 					} else {
 						routingContext.response().setStatusCode(400).end(comm.cause().toString());
 					}
@@ -419,6 +430,7 @@ public class RestEP extends AbstractVerticle {
 							}
 
 						});
+						connection.close();
 					} else {
 						routingContext.response().setStatusCode(400).end(comm.cause().toString());
 					}
@@ -435,6 +447,55 @@ public class RestEP extends AbstractVerticle {
 
 	}
 
+	
+	public void getUltimaMedicion (RoutingContext routingContext) {
+		// Recogemos el valor del parametro
+		String tabla = routingContext.request().getParam("tabla");
+
+		if (tabla != null) {
+			try {
+				// Nos conectamos a la base de datos
+				databaseClient.getConnection(comm -> {
+
+					if (comm.succeeded()) {
+						SQLConnection connection = comm.result();
+						String query = "SELECT medicion FROM " + tabla + " ORDER BY indice DESC LIMIT 1";
+						// JsonArray paramQuery = new JsonArray().add(tabla);
+						// connection.queryWithParams(query, paramQuery, res -> {
+						connection.query(query, res -> {
+
+							if (res.succeeded()) {
+
+							//	String datos = Json.encode(res.result().getRows());
+								List<JsonObject> jsons = res.result().getRows();
+								Double medicion = jsons.get(0).getDouble("medicion");
+
+								routingContext.response().setStatusCode(200)
+										.end(medicion.toString());
+
+							} else {
+								routingContext.response().setStatusCode(400).end(res.cause().toString());
+							}
+
+						});
+						connection.close();
+					} else {
+						routingContext.response().setStatusCode(400).end(comm.cause().toString());
+					}
+
+				});
+
+				// routingContext.response().setStatusCode(200).end(Json.encodePrettily(database.get(param)));
+			} catch (ClassCastException e) {
+				routingContext.response().setStatusCode(400).end();
+			}
+		} else {
+			routingContext.response().setStatusCode(400).end();
+		}
+
+	}
+
+	
 	// Inserta una medicion (:medicion) en una tabla existente (:tabla) del sensor
 	// con id que sea (:id)
 	public void putMed(RoutingContext routingContext) {
@@ -487,6 +548,7 @@ public class RestEP extends AbstractVerticle {
 									routingContext.response().setStatusCode(400).end(res.cause().toString());
 								}
 							});
+							connection.close();
 						} else {
 							routingContext.response().setStatusCode(400).end(comm.cause().toString());
 						}
