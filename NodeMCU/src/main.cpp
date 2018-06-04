@@ -4,8 +4,8 @@
 #include "./mqtt/mqtt.hpp"
 #include "./rest/rest.hpp"
 
-char* ssid = (char*)"vodafone3090";
-char* pass = (char*)"MZMYCDZFWZZMDM";
+char* ssid = (char*)"yourwifissid";
+char* pass = (char*)"yourpass";
 char* ip = (char*)"217.216.241.223";
 const int mqttPrt = 30654;
 const int httpPrt = 25489;
